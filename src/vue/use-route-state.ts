@@ -1,17 +1,49 @@
 import type { WritableComputedRef } from 'vue'
 import type {
-  InferParserMapType,
-  MultiRouteStateOptions,
+  HistoryMode,
   Parser,
-  ParserMap,
   ParserWithDefault,
   RouteStateOptions,
+  RouteStatePerKeyOptions,
   RouteStateSource,
 } from '../core/types'
 import { computed, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { parseAsString } from '../core/parsers'
 import { DEFAULT_OPTIONS, QPICK_INJECTION_KEY } from './plugin'
+
+type AnyConfigInput = { key: string, parser?: Parser<any> } & RouteStatePerKeyOptions
+
+type InferConfigValue<C>
+  = C extends { parser: ParserWithDefault<infer T, any> } ? T
+    : C extends { parser: Parser<infer T> } ? T | null
+      : string | null
+
+type InferConfigKey<C> = C extends { key: infer K extends string } ? K : never
+
+type MultiRouteStateValues<C extends readonly any[]> = {
+  [K in C[number] as InferConfigKey<K>]: InferConfigValue<K>
+}
+
+type BatchOptions = {
+  history?: HistoryMode
+}
+
+type MultiRouteStateReturn<C extends readonly any[]> = {
+  [K in C[number] as InferConfigKey<K>]: WritableComputedRef<InferConfigValue<K>>
+} & {
+  set: (values: Partial<MultiRouteStateValues<C>>, options?: BatchOptions) => void
+  reset: (options?: BatchOptions) => void
+  toObject: () => MultiRouteStateValues<C>
+}
+
+type ResolvedConfig = {
+  parser: Parser<any>
+  urlKey: string
+  source: RouteStateSource
+  clearOnDefault: boolean
+  method: HistoryMode
+}
 
 function getDefault<T>(parser: Parser<T>): T | null {
   return 'defaultValue' in parser ? (parser as ParserWithDefault<T, T>).defaultValue : null
@@ -58,7 +90,7 @@ function navigate(
   route: ReturnType<typeof useRoute>,
   queryUpdates: Record<string, string | null>,
   paramUpdates: Record<string, string | null>,
-  method: 'push' | 'replace',
+  method: HistoryMode,
 ): void {
   const newQuery = { ...route.query }
   for (const [k, v] of Object.entries(queryUpdates)) {
@@ -81,150 +113,132 @@ function navigate(
   })
 }
 
-export function useRouteState(
-  key: string,
-  options?: Partial<RouteStateOptions>,
-): WritableComputedRef<string | null>
-
-export function useRouteState<T, D extends T>(
-  key: string,
-  parser: ParserWithDefault<T, D>,
-  options?: Partial<RouteStateOptions>,
-): WritableComputedRef<T>
-
-export function useRouteState<T>(
-  key: string,
-  parser: Parser<T>,
-  options?: Partial<RouteStateOptions>,
-): WritableComputedRef<T | null>
-
-export function useRouteState<T extends ParserMap>(
-  parsers: T,
-  options?: MultiRouteStateOptions<T>,
-): {
-  [K in keyof T]: T[K] extends ParserWithDefault<infer V, any>
-    ? WritableComputedRef<V>
-    : T[K] extends Parser<infer V>
-      ? WritableComputedRef<V | null>
-      : never
-} & {
-  set: (values: Partial<InferParserMapType<T>>) => void
-  reset: () => void
-  toObject: () => InferParserMapType<T>
+function resolveConfig(
+  config: AnyConfigInput,
+  defaults: Partial<RouteStateOptions>,
+  route: ReturnType<typeof useRoute>,
+): ResolvedConfig {
+  const parser = config.parser ?? parseAsString
+  const urlKey = config.urlKey ?? config.key
+  const source = config.source ?? defaults.source ?? detectSource(urlKey, route)
+  const clearOnDefault = config.clearOnDefault ?? defaults.clearOnDefault ?? true
+  const method = config.history ?? defaults.history ?? 'push'
+  return { parser, urlKey, source, clearOnDefault, method }
 }
 
+function createComputedRef(
+  resolved: ResolvedConfig,
+  router: ReturnType<typeof useRouter>,
+  route: ReturnType<typeof useRoute>,
+): WritableComputedRef<any> {
+  return computed({
+    get() {
+      return readValue(resolved.urlKey, resolved.source, resolved.parser, route)
+    },
+    set(newValue: any) {
+      const serialized = toSerialized(newValue, resolved.parser, resolved.clearOnDefault)
+      const queryUpdates = resolved.source === 'query' ? { [resolved.urlKey]: serialized } : {}
+      const paramUpdates = resolved.source === 'params' ? { [resolved.urlKey]: serialized } : {}
+      navigate(router, route, queryUpdates, paramUpdates, resolved.method)
+    },
+  })
+}
+
+export function useRouteState<K extends string, T>(
+  config: { key: K, parser: ParserWithDefault<T, any> } & RouteStatePerKeyOptions,
+): WritableComputedRef<T>
+
+export function useRouteState<K extends string, T>(
+  config: { key: K, parser: Parser<T> } & RouteStatePerKeyOptions,
+): WritableComputedRef<T | null>
+
+export function useRouteState<K extends string>(
+  config: { key: K } & RouteStatePerKeyOptions,
+): WritableComputedRef<string | null>
+
+export function useRouteState<const C extends readonly AnyConfigInput[]>(
+  configs: [...C],
+): MultiRouteStateReturn<C>
+
 export function useRouteState(
-  keyOrParsers: string | ParserMap,
-  parserOrOptions?: Parser<any> | MultiRouteStateOptions<any> | Partial<RouteStateOptions>,
-  singleOptions?: Partial<RouteStateOptions>,
+  configOrConfigs: AnyConfigInput | readonly AnyConfigInput[],
 ): any {
   const defaults = inject(QPICK_INJECTION_KEY)?.defaults ?? DEFAULT_OPTIONS
   const route = useRoute()
   const router = useRouter()
 
-  if (typeof keyOrParsers === 'string') {
-    const key = keyOrParsers
-    let parser: Parser<any>
-    let opts: Partial<RouteStateOptions>
+  if (Array.isArray(configOrConfigs)) {
+    const configs = configOrConfigs as AnyConfigInput[]
+    const refs: Record<string, WritableComputedRef<any>> = {}
+    const meta: Record<string, ResolvedConfig> = {}
 
-    if (parserOrOptions && 'parse' in parserOrOptions) {
-      parser = parserOrOptions
-      opts = { ...defaults, ...singleOptions }
-    }
-    else {
-      parser = parseAsString
-      opts = { ...defaults, ...parserOrOptions }
+    for (const config of configs) {
+      const resolved = resolveConfig(config, defaults, route)
+      meta[config.key] = resolved
+      refs[config.key] = createComputedRef(resolved, router, route)
     }
 
-    const source = opts.source ?? detectSource(key, route)
-    const clearOnDefault = opts.clearOnDefault !== false
-    const method = opts.history ?? 'push'
-
-    return computed({
-      get() {
-        return readValue(key, source, parser, route)
-      },
-      set(newValue: any) {
-        const serialized = toSerialized(newValue, parser, clearOnDefault)
-        const queryUpdates = source === 'query' ? { [key]: serialized } : {}
-        const paramUpdates = source === 'params' ? { [key]: serialized } : {}
-        navigate(router, route, queryUpdates, paramUpdates, method)
-      },
-    })
-  }
-
-  const parsers = keyOrParsers
-  const options = (parserOrOptions ?? {}) as MultiRouteStateOptions<any>
-  const urlKeys = options.urlKeys ?? {}
-  const sourcesMap = options.sources ?? {}
-  const opts = { ...defaults, ...options }
-  const clearOnDefault = opts.clearOnDefault !== false
-  const method = opts.history ?? 'push'
-
-  const refs: Record<string, WritableComputedRef<any>> = {}
-  const meta: Record<string, { parser: Parser<any>, source: RouteStateSource, urlKey: string }> = {}
-
-  for (const [key, parser] of Object.entries(parsers)) {
-    const urlKey = urlKeys[key] ?? key
-    const source = sourcesMap[key] ?? detectSource(urlKey, route)
-    meta[key] = { parser, source, urlKey }
-
-    refs[key] = computed({
-      get() { return readValue(urlKey, source, parser, route) },
-      set(newValue: any) {
-        const serialized = toSerialized(newValue, parser, clearOnDefault)
-        const queryUpdates = source === 'query' ? { [urlKey]: serialized } : {}
-        const paramUpdates = source === 'params' ? { [urlKey]: serialized } : {}
-        navigate(router, route, queryUpdates, paramUpdates, method)
-      },
-    })
-  }
-
-  function set(values: Record<string, any>): void {
-    const queryUpdates: Record<string, string | null> = {}
-    const paramUpdates: Record<string, string | null> = {}
-
-    for (const [key, value] of Object.entries(values)) {
-      const m = meta[key]
-      if (!m)
-        continue
-
-      const serialized = toSerialized(value, m.parser, clearOnDefault)
-      if (m.source === 'query')
-        queryUpdates[m.urlKey] = serialized
-      else
-        paramUpdates[m.urlKey] = serialized
+    function resolveBatchMethod(keys: string[], override?: HistoryMode): HistoryMode {
+      if (override)
+        return override
+      for (const key of keys) {
+        if (meta[key]?.method === 'push')
+          return 'push'
+      }
+      return 'replace'
     }
 
-    navigate(router, route, queryUpdates, paramUpdates, method)
-  }
+    function set(values: Record<string, any>, options?: BatchOptions): void {
+      const queryUpdates: Record<string, string | null> = {}
+      const paramUpdates: Record<string, string | null> = {}
 
-  function reset(): void {
-    const queryUpdates: Record<string, string | null> = {}
-    const paramUpdates: Record<string, string | null> = {}
+      for (const [key, value] of Object.entries(values)) {
+        const m = meta[key]
+        if (!m)
+          continue
 
-    for (const [_, m] of Object.entries(meta)) {
-      const serialized = toSerialized(getDefault(m.parser), m.parser, clearOnDefault)
-      if (m.source === 'query')
-        queryUpdates[m.urlKey] = serialized
-      else paramUpdates[m.urlKey] = serialized
+        const serialized = toSerialized(value, m.parser, m.clearOnDefault)
+        if (m.source === 'query')
+          queryUpdates[m.urlKey] = serialized
+        else
+          paramUpdates[m.urlKey] = serialized
+      }
+
+      const method = resolveBatchMethod(Object.keys(values), options?.history)
+      navigate(router, route, queryUpdates, paramUpdates, method)
     }
 
-    navigate(router, route, queryUpdates, paramUpdates, method)
-  }
+    function reset(options?: BatchOptions): void {
+      const queryUpdates: Record<string, string | null> = {}
+      const paramUpdates: Record<string, string | null> = {}
 
-  function toObject(): Record<string, any> {
-    const result: Record<string, any> = {}
-    for (const [key, r] of Object.entries(refs)) {
-      result[key] = r.value
+      for (const m of Object.values(meta)) {
+        const serialized = toSerialized(getDefault(m.parser), m.parser, m.clearOnDefault)
+        if (m.source === 'query')
+          queryUpdates[m.urlKey] = serialized
+        else
+          paramUpdates[m.urlKey] = serialized
+      }
+
+      const method = resolveBatchMethod(Object.keys(meta), options?.history)
+      navigate(router, route, queryUpdates, paramUpdates, method)
     }
-    return result
+
+    function toObject(): Record<string, any> {
+      const result: Record<string, any> = {}
+      for (const [key, r] of Object.entries(refs)) {
+        result[key] = r.value
+      }
+      return result
+    }
+
+    return {
+      ...refs,
+      set,
+      reset,
+      toObject,
+    }
   }
 
-  return {
-    ...refs,
-    set,
-    reset,
-    toObject,
-  }
+  return createComputedRef(resolveConfig(configOrConfigs as AnyConfigInput, defaults, route), router, route)
 }

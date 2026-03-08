@@ -14,28 +14,32 @@ export type ParserWithDefault<T, D extends T = T> = Parser<T> & {
 
 export type RouteStateSource = 'query' | 'params'
 
+export type HistoryMode = 'push' | 'replace'
+
 export type RouteStateOptions = {
-  history: 'push' | 'replace'
+  history: HistoryMode
   clearOnDefault: boolean
   source: RouteStateSource
 }
 
-export type ParserMap = Record<string, Parser<any> | ParserWithDefault<any, any>>
-
-export type UrlKeys<T extends ParserMap> = Partial<{ [K in keyof T]: string }>
-
-export type Sources<T extends ParserMap> = Partial<{ [K in keyof T]: RouteStateSource }>
-
-export type MultiRouteStateOptions<T extends ParserMap> = Partial<RouteStateOptions> & {
-  urlKeys?: UrlKeys<T>
-  sources?: Sources<T>
+export type RouteStatePerKeyOptions = {
+  urlKey?: string
+  clearOnDefault?: boolean
+  history?: HistoryMode
+  source?: RouteStateSource
 }
+
+export type RouteStateConfig<K extends string = string, T = any> = {
+  key: K
+  parser: Parser<T> | ParserWithDefault<T, T>
+} & RouteStatePerKeyOptions
+
+export type RouteStateConfigInput<K extends string = string, T = any> = {
+  key: K
+  parser?: Parser<T> | ParserWithDefault<T, T>
+} & RouteStatePerKeyOptions
 
 export type InferParserType<T>
   = T extends ParserWithDefault<infer V, any> ? V
     : T extends Parser<infer V> ? V | null
       : never
-
-export type InferParserMapType<T extends ParserMap> = {
-  [K in keyof T]: InferParserType<T[K]>
-}

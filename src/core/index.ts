@@ -13,16 +13,17 @@ export {
   parseAsStringLiteral,
 } from './parsers'
 
+export { routeStateOptions } from './route-state-options'
+
 export type {
-  InferParserMapType,
+  HistoryMode,
   InferParserType,
-  MultiRouteStateOptions,
   Parser,
   ParserConfig,
-  ParserMap,
   ParserWithDefault,
+  RouteStateConfig,
+  RouteStateConfigInput,
   RouteStateOptions,
+  RouteStatePerKeyOptions,
   RouteStateSource,
-  Sources,
-  UrlKeys,
 } from './types'

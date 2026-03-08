@@ -1,15 +1,14 @@
 export type {
-  InferParserMapType,
+  HistoryMode,
   InferParserType,
-  MultiRouteStateOptions,
   Parser,
   ParserConfig,
-  ParserMap,
   ParserWithDefault,
+  RouteStateConfig,
+  RouteStateConfigInput,
   RouteStateOptions,
+  RouteStatePerKeyOptions,
   RouteStateSource,
-  Sources,
-  UrlKeys,
 } from './core'
 
 export {
@@ -25,6 +24,7 @@ export {
   parseAsString,
   parseAsStringEnum,
   parseAsStringLiteral,
+  routeStateOptions,
 } from './core'
 
 export type {
