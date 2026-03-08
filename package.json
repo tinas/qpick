@@ -1,7 +1,7 @@
 {
   "name": "qpick",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.1",
   "description": "Type-safe URL state management for Vue.",
   "author": "Ahmet Tinastepe",
   "license": "MIT",
@@ -44,7 +44,8 @@
     "test:run": "vitest run",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "release": "pnpm build && pnpm test && changelogen --release --push --publish",
+    "release": "pnpm build && pnpm test:run && changelogen --release --push --publish",
+    "release:alpha": "pnpm build && pnpm test:run && changelogen --release --prerelease alpha --push --publish --publishTag alpha",
     "changelog": "changelogen --bump"
   },
   "peerDependencies": {
