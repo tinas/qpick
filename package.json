@@ -1,0 +1,66 @@
+{
+  "name": "qpick",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Type-safe URL state management for Vue.",
+  "author": "Ahmet Tinastepe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tinas/qpick.git"
+  },
+  "keywords": [
+    "vue",
+    "query-string",
+    "url-state",
+    "search-params",
+    "type-safe",
+    "vue-router",
+    "params",
+    "route-state"
+  ],
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "release": "pnpm build && pnpm test && changelogen --release --push --publish",
+    "changelog": "changelogen --bump"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0",
+    "vue-router": "^4.2.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.7.0",
+    "@vue/test-utils": "^2.4.6",
+    "changelogen": "^0.6.2",
+    "eslint": "^10.0.3",
+    "jsdom": "^28.1.0",
+    "tsdown": "^0.9.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.0.18",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0"
+  }
+}
