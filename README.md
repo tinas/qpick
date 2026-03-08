@@ -1,5 +1,12 @@
 # qpick
 
+<!-- automd:badges color=F0DB4F bundlephobia -->
+
+[![npm version](https://img.shields.io/npm/v/qpick?color=F0DB4F)](https://npmjs.com/package/qpick)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/qpick?color=F0DB4F)](https://bundlephobia.com/package/qpick)
+
+<!-- /automd -->
+
 > Type-safe, reactive URL state management for Vue.
 
 ## Name
@@ -283,7 +290,7 @@ const filters = useRouteState([
   </select>
 
   <div>
-    Page {{ filters.page.value }}
+    Page {{ filters.page }}
     <button @click="filters.page.value++">
       Next
     </button>
@@ -292,6 +299,8 @@ const filters = useRouteState([
 ```
 
 Each key in the returned object is a writable computed ref, consistent with the single-key form.
+
+> **Note:** In single config mode, `useRouteState` returns a ref directly — Vue auto-unwraps it in templates, so `v-model="search"` and `{{ search }}` work without `.value`. In array config mode, the returned object contains refs as properties. Since [ref unwrapping in templates only applies to top-level properties](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#caveat-when-unwrapping-in-templates), `v-model` bindings require `.value` (e.g. `v-model="filters.page.value"`), while template interpolation (`{{ filters.page }}`) auto-unwraps as usual. In `<script>`, `.value` is always required.
 
 ### Batch Updates with `set()`
 
@@ -540,11 +549,11 @@ const page = useRouteState(pageState)
 </script>
 
 <template>
-  <span>Page {{ page.value }}</span>
-  <button :disabled="page.value <= 1" @click="page.value--">
+  <span>Page {{ page }}</span>
+  <button :disabled="page <= 1" @click="page--">
     Previous
   </button>
-  <button @click="page.value++">
+  <button @click="page++">
     Next
   </button>
 </template>
