@@ -9,26 +9,19 @@
 
 > Type-safe, reactive URL state management for Vue.
 
-## Name
-
-The name **qpick** is derived from **query + pick**, inspired by the concept of **cherry-picking** — extracting only the specific parameters needed from the URL.
-
-- **q** refers to URL query parameters
-- **pick** refers to selecting specific values
-
-qpick is pronounced **"q-pick"**.
+**qpick** — query + pick. Cherry-pick parameters from the URL as reactive state.
 
 ## Introduction
 
-`qpick` is a Vue plugin built on top of `vue-router` that provides a declarative API for selecting and synchronizing URL search parameters as reactive state. Rather than accessing `route.query` directly, watching for changes, and mapping values manually, `qpick` enables specific parameters to be picked from the URL and used as writable computed refs.
+`qpick` is a Vue composable built on `vue-router` that turns URL parameters into writable computed refs. Instead of manually reading `route.query`, watching for changes, and navigating back — the URL becomes the source of truth with a declarative config.
 
-`qpick` relies on `vue-router` internally, integrating with existing routing logic without additional configuration. It exposes a single composable — `useRouteState` — that synchronizes URL query strings and path parameters with Vue's reactivity system. The URL serves as the source of truth, and each value is a writable computed ref that supports `v-model`, remains in sync with browser navigation, and has its type fully inferred from the parser definition.
+- Works with query strings and path parameters
+- Full type inference from parser definitions
+- Supports `v-model` directly
+- Single or batch parameter updates
+- No plugin required — optional global defaults via `defineQPick`
 
 ## Installation
-
-```bash
-npm install qpick
-```
 
 ```bash
 pnpm add qpick
@@ -36,96 +29,43 @@ pnpm add qpick
 
 ## Quick Start
 
-### Plugin Setup (Optional)
-
-The plugin can be registered in the application entry point to configure global defaults. If the plugin is not installed, `useRouteState` uses built-in defaults:
-
-- `history` — `'push'`
-- `clearOnDefault` — `true`
-
-```ts
-import { createQPick } from 'qpick'
-import { createApp } from 'vue'
-import { createRouter, createWebHistory } from 'vue-router'
-import App from './App.vue'
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    { name: 'products', path: '/products', component: () => import('./views/ProductList.vue') },
-    { name: 'product', path: '/products/:id', component: () => import('./views/ProductDetail.vue') },
-  ],
-})
-
-const app = createApp(App)
-app.use(router)
-app.use(createQPick()) // optional — only needed to override defaults
-app.mount('#app')
-```
-
-To override the defaults globally:
-
-```ts
-app.use(createQPick({
-  defaults: {
-    history: 'push', // 'push' | 'replace' — default: 'push'
-    clearOnDefault: true, // remove param from URL when value equals default — default: true
-  },
-}))
-```
-
-### Basic Usage
-
-The minimal usage requires a key name. When no parser is provided, the value is treated as a raw string:
-
 ```html
-<!-- SearchBar.vue -->
 <script setup lang="ts">
 import { useRouteState } from 'qpick'
 
-// search.value is string | null
-// URL: /?q=headphones → search.value === 'headphones'
-// URL: /              → search.value === null
+// string | null — reads from ?q=...
 const search = useRouteState({ key: 'q' })
 </script>
 
 <template>
   <input
     :value="search ?? ''"
-    placeholder="Search products..."
+    placeholder="Search..."
     @input="search = ($event.target as HTMLInputElement).value || null"
   >
-  <button v-if="search" @click="search = null">
-    Clear
-  </button>
 </template>
 ```
 
-`useRouteState` returns a writable computed ref that integrates with Vue's reactivity system. Setting `search.value = 'headphones'` navigates to `/?q=headphones`. Setting it to `null` removes the parameter from the URL.
+Setting `search.value = 'headphones'` navigates to `/?q=headphones`. Setting it to `null` removes the parameter.
 
-> **Note:** When binding a nullable string to an input, `parseAsString.default('')` eliminates `null` handling and enables direct `v-model` binding:
+> **Tip:** `parseAsString.default('')` eliminates `null` handling and enables direct `v-model`:
 >
 > ```ts
 > import { parseAsString, useRouteState } from 'qpick'
 >
 > const search = useRouteState({ key: 'q', parser: parseAsString.default('') })
 > // search.value is string — never null
-> // Setting search.value = '' removes ?q from the URL
 > ```
 >
 > ```html
-> <template>
->   <input v-model="search" placeholder="Search products...">
-> </template>
+> <input v-model="search" placeholder="Search...">
 > ```
 
 ## Parsers
 
-Values obtained from URL search parameters are represented as strings. Parsers handle the conversion between the string representation in the URL and the typed value in the application. Each parser defines two functions: `parse` (string → typed value) and `serialize` (typed value → string).
+URL parameters are strings. Parsers handle bidirectional conversion between the URL string and the typed value. Each parser defines `parse` (string → value | null) and `serialize` (value → string).
 
 ### Using a Parser
-
-Pass a parser in the config object:
 
 ```ts
 import { parseAsInteger, useRouteState } from 'qpick'
@@ -134,54 +74,45 @@ const page = useRouteState({ key: 'page', parser: parseAsInteger })
 // page.value is number | null
 ```
 
-When the URL contains `?page=3`, `page.value` returns `3` as a number. When the parameter is absent or contains an invalid value such as `?page=abc`, `page.value` returns `null`.
-
 ### Default Values
 
-In typical applications, a guaranteed non-null value is preferable. The `.default()` method provides this:
+The `.default()` method guarantees a non-null value and enables `clearOnDefault` behavior:
 
 ```ts
 const page = useRouteState({ key: 'page', parser: parseAsInteger.default(1) })
 // page.value is number — never null
+// Setting page.value = 1 removes ?page from the URL
 ```
-
-This changes two behaviors:
-
-1. The return type becomes non-nullable (`number` instead of `number | null`).
-2. When the current value equals the default, the parameter is removed from the URL (controlled by the `clearOnDefault` option).
 
 ### Built-in Parsers
 
 | Parser | Type | URL Example | Description |
 |---|---|---|---|
-| `parseAsString` | `string` | `?q=headphones` | Returns the raw string value |
-| `parseAsInteger` | `number` | `?page=2` | Parses with `parseInt`, base 10 |
-| `parseAsFloat` | `number` | `?lat=41.015` | Parses with `parseFloat` |
-| `parseAsBoolean` | `boolean` | `?inStock=true` | Accepts `"true"` and `"false"` |
+| `parseAsString` | `string` | `?q=headphones` | Raw string value |
+| `parseAsInteger` | `number` | `?page=2` | `parseInt` base 10 |
+| `parseAsFloat` | `number` | `?lat=41.015` | `parseFloat` |
+| `parseAsBoolean` | `boolean` | `?inStock=true` | Accepts `"true"` / `"false"` |
 | `parseAsIndex` | `number` | `?step=1` → `0` | 1-based in URL, 0-based in code |
 | `parseAsStringLiteral([...])` | Union | `?sort=price` | Validates against allowed values |
-| `parseAsNumberLiteral([...])` | Union | `?rating=5` | Validates against allowed numeric values |
+| `parseAsNumberLiteral([...])` | Union | `?rating=5` | Validates against allowed numbers |
 | `parseAsStringEnum(values)` | Enum | `?status=ACTIVE` | For TypeScript string enums |
-| `parseAsDate` | `Date` | `?from=2024-01-15` | Accepts YYYY-MM-DD or full datetime, serializes as YYYY-MM-DD |
-| `parseAsDate.iso()` | `Date` | `?from=2024-01-15T10:30:00.000Z` | Full ISO 8601 datetime |
+| `parseAsDate` | `Date` | `?from=2024-01-15` | YYYY-MM-DD format |
+| `parseAsDate.iso()` | `Date` | `?from=2024-01-15T10:30:00.000Z` | Full ISO 8601 |
 | `parseAsDate.timestamp()` | `Date` | `?t=1705312200000` | Unix milliseconds |
-| `parseAsArrayOf(parser)` | `T[]` | `?tags=vue,ts` | Comma-separated (configurable separator) |
+| `parseAsArrayOf(parser)` | `T[]` | `?tags=vue,ts` | Comma-separated (configurable) |
 | `parseAsJson<T>()` | `T` | `?config={"k":"v"}` | JSON-encoded values |
 
 ### String Literals and Enums
 
-When a parameter should accept one of a fixed set of values, `parseAsStringLiteral` provides both runtime validation and type narrowing:
-
 ```ts
 const sort = useRouteState({
   key: 'sort',
-  parser: parseAsStringLiteral(['price', 'name', 'rating', 'newest']).default('newest'),
+  parser: parseAsStringLiteral(['price', 'name', 'rating']).default('price'),
 })
-// sort.value is 'price' | 'name' | 'rating' | 'newest'
-// ?sort=invalid falls back to 'newest'
+// sort.value is 'price' | 'name' | 'rating'
 ```
 
-For TypeScript string enums, use `parseAsStringEnum`:
+For TypeScript string enums:
 
 ```ts
 enum OrderStatus {
@@ -194,21 +125,19 @@ const status = useRouteState({
   key: 'status',
   parser: parseAsStringEnum<OrderStatus>(Object.values(OrderStatus)),
 })
-// status.value is OrderStatus | null
 ```
 
 ### Arrays
-
-Any parser can be composed with `parseAsArrayOf` to handle comma-separated values in the URL:
 
 ```ts
 const categories = useRouteState({
   key: 'categories',
   parser: parseAsArrayOf(parseAsString).default([]),
 })
-// ?categories=electronics,clothing,books → ['electronics', 'clothing', 'books']
+// ?categories=electronics,clothing → ['electronics', 'clothing']
 
-const priceRanges = useRouteState({
+// Custom separator
+const prices = useRouteState({
   key: 'prices',
   parser: parseAsArrayOf(parseAsInteger, ';').default([]),
 })
@@ -217,29 +146,36 @@ const priceRanges = useRouteState({
 
 ### Custom Parsers
 
-When the built-in parsers are insufficient, define a custom parser with `createParser`:
-
 ```ts
-import { createParser, useRouteState } from 'qpick'
+import { defineParser, useRouteState } from 'qpick'
 
+// Single-expression parsers work well as arrow functions
+type HexColor = number // 0x000000–0xFFFFFF
+
+const parseAsHexColor = defineParser<HexColor>({
+  parse: v => Number.isNaN(Number.parseInt(v, 16)) ? null : Number.parseInt(v, 16),
+  serialize: v => v.toString(16).padStart(6, '0'),
+})
+// ?color=ff5733 → 16734003
+
+// Method shorthand works the same way
 interface PriceRange {
   min: number
   max: number
 }
 
-const parseAsPriceRange = createParser<PriceRange>({
+const parseAsPriceRange = defineParser<PriceRange>({
   parse(value) {
-    const [min, max] = value.split('-').map(Number)
-    if (min === undefined || max === undefined || Number.isNaN(min) || Number.isNaN(max))
+    const parts = value.split('-')
+    if (parts.length !== 2)
+      return null
+    const min = Number(parts[0])
+    const max = Number(parts[1])
+    if (Number.isNaN(min) || Number.isNaN(max))
       return null
     return { min, max }
   },
-  serialize(value) {
-    return `${value.min}-${value.max}`
-  },
-  eq(a, b) {
-    return a.min === b.min && a.max === b.max
-  },
+  serialize: v => `${v.min}-${v.max}`,
 })
 
 const priceRange = useRouteState({
@@ -249,197 +185,139 @@ const priceRange = useRouteState({
 // ?price=50-200 → { min: 50, max: 200 }
 ```
 
-The `eq` function is required for types that cannot be compared with `===`. It is used by the `clearOnDefault` option to determine whether the current value matches the default.
-
 ## Multiple Parameters
 
-When working with several related URL parameters, pass an array of config objects:
+`useRouteState` also accepts an array of configs to manage related parameters together:
 
 ```html
-<!-- ProductList.vue -->
 <script setup lang="ts">
-import {
-  parseAsArrayOf,
-  parseAsInteger,
-  parseAsString,
-  parseAsStringLiteral,
-  useRouteState,
-} from 'qpick'
+import { parseAsInteger, parseAsString, parseAsStringLiteral, useRouteState } from 'qpick'
 
 const filters = useRouteState([
   { key: 'q', parser: parseAsString.default('') },
   { key: 'page', parser: parseAsInteger.default(1) },
   { key: 'sort', parser: parseAsStringLiteral(['price', 'name', 'rating']).default('price') },
-  { key: 'categories', parser: parseAsArrayOf(parseAsString).default([]) },
 ])
 </script>
 
 <template>
-  <input v-model="filters.q.value" placeholder="Search products...">
-
+  <input v-model="filters.q.value" placeholder="Search...">
   <select v-model="filters.sort.value">
-    <option value="price">
-      Price
-    </option>
-    <option value="name">
-      Name
-    </option>
-    <option value="rating">
-      Rating
-    </option>
+    <option value="price">Price</option>
+    <option value="name">Name</option>
+    <option value="rating">Rating</option>
   </select>
-
-  <div>
-    Page {{ filters.page }}
-    <button @click="filters.page.value++">
-      Next
-    </button>
-  </div>
+  <button @click="filters.page.value++">Next page</button>
 </template>
 ```
 
-Each key in the returned object is a writable computed ref, consistent with the single-key form.
-
-> **Note:** In single config mode, `useRouteState` returns a ref directly — Vue auto-unwraps it in templates, so `v-model="search"` and `{{ search }}` work without `.value`. In array config mode, the returned object contains refs as properties. Since [ref unwrapping in templates only applies to top-level properties](https://vuejs.org/guide/essentials/reactivity-fundamentals.html#caveat-when-unwrapping-in-templates), `v-model` bindings require `.value` (e.g. `v-model="filters.page.value"`), while template interpolation (`{{ filters.page }}`) auto-unwraps as usual. In `<script>`, `.value` is always required.
+> **Note:** In single config mode, `useRouteState` returns a ref directly — Vue auto-unwraps it in templates. In array mode, each property is a ref, so `v-model` requires `.value` (e.g. `v-model="filters.q.value"`).
 
 ### Batch Updates with `set()`
 
-When multiple parameters must change simultaneously — for example, resetting to page 1 when the search query changes — use `set()` to perform a single navigation:
+`set()` updates multiple parameters in a single navigation:
 
 ```ts
 function onSearch(term: string) {
   filters.set({ q: term, page: 1 })
 }
-```
 
-Without `set()`, assigning `filters.q.value` and `filters.page.value` separately triggers two router navigations. `set()` combines them into one.
-
-`set()` accepts an optional second argument to override the history mode for that call:
-
-```ts
-// Force replace regardless of per-config history settings
+// Override history mode for this call
 filters.set({ q: term, page: 1 }, { history: 'replace' })
 ```
 
-See [History Resolution in Batch Operations](#history-resolution-in-batch-operations) for how the history mode is determined when configs disagree.
+### `reset()`
 
-### Resetting to Defaults
-
-The `reset()` method restores all parameters to their default values in a single navigation:
+Restores all parameters to defaults in a single navigation:
 
 ```ts
-function clearAllFilters() {
-  filters.reset()
-}
-```
-
-This removes all defaulted parameters from the URL and returns each value to its default.
-
-`reset()` also accepts an optional history override:
-
-```ts
+filters.reset()
 filters.reset({ history: 'replace' })
 ```
 
-### Reading as a Plain Object
+### `toObject()`
 
-The `toObject()` method returns all current values as a plain object, suitable for API calls or watchers:
+Returns current values as a plain object:
 
 ```ts
-import { watch } from 'vue'
-
 watch(() => filters.toObject(), (params) => {
-  // params: { q: string, page: number, sort: string, categories: string[] }
   fetchProducts(params)
 })
 ```
 
 ### URL Key Remapping
 
-Property names in code do not have to match the parameter names in the URL. The `urlKey` option on each config maps the key to a different URL parameter:
+The `urlKey` option maps a code-friendly property name to a different URL parameter name:
 
 ```ts
 const filters = useRouteState([
   { key: 'search', parser: parseAsString.default(''), urlKey: 'q' },
-  { key: 'page', parser: parseAsInteger.default(1) },
   { key: 'sortOrder', parser: parseAsStringLiteral(['asc', 'desc']).default('asc'), urlKey: 'dir' },
 ])
-
-// In code:  filters.search.value, filters.sortOrder.value
-// In URL:   ?q=headphones&dir=desc
+// Code: filters.search.value, filters.sortOrder.value
+// URL:  ?q=headphones&dir=desc
 ```
 
 ## Path Parameters
 
-In addition to query strings, `qpick` supports path parameters defined in Vue Router route definitions.
-
 ### Automatic Detection
 
-When a key matches a named parameter in `route.params`, `qpick` reads from the path parameter automatically:
+When a key matches a named route parameter, `qpick` reads from path params automatically:
 
 ```ts
-// Route definition: /products/:id
+// Route: /products/:id
 const id = useRouteState({ key: 'id', parser: parseAsInteger })
-// Reads from route.params.id
 ```
 
 ### Explicit Source
-
-In cases where the same key could exist in both query and params, the source can be specified explicitly:
 
 ```ts
 const id = useRouteState({ key: 'id', parser: parseAsInteger, source: 'params' })
 ```
 
-### Mixing Query and Path Parameters
-
-In array mode, each config specifies its own `source`:
+### Mixing Sources
 
 ```ts
-// Route definition: /users/:id
+// Route: /users/:id
 const state = useRouteState([
-  { key: 'id', parser: parseAsInteger, source: 'params' },
-  { key: 'tab', parser: parseAsStringLiteral(['profile', 'orders', 'settings']).default('profile') },
-  { key: 'page', parser: parseAsInteger.default(1) },
+  { key: 'userId', parser: parseAsInteger, source: 'params', urlKey: 'id' },
+  { key: 'tab', parser: parseAsStringLiteral(['profile', 'orders', 'settings']).default('profile'), source: 'query' },
+  { key: 'page', parser: parseAsInteger.default(1), source: 'query' },
 ])
+```
 
-// state.id.value    → from route.params.id
-// state.tab.value   → from route.query.tab
-// state.page.value  → from route.query.page
+> **Note:** Each `key` in the config array must be unique — it becomes the property name on the returned object. Duplicate keys are not detected at runtime; the last config silently overwrites earlier ones. When the same URL parameter name exists in both path and query, different keys with the same `urlKey` distinguish them:
+
+```ts
+// Route: /brands/:id?id=456
+// A brand page that highlights a specific product
+const state = useRouteState([
+  { key: 'brandId', parser: parseAsInteger, source: 'params', urlKey: 'id' },
+  { key: 'productId', parser: parseAsInteger, source: 'query', urlKey: 'id' },
+])
+// state.brandId.value   → route.params.id
+// state.productId.value → route.query.id
 ```
 
 ## Options
 
 ### `history`
 
-Controls whether state changes push a new entry to the browser history or replace the current entry. The default is `'push'`, which allows navigation to previous states via the browser back button.
+Controls whether changes push a new history entry or replace the current one. Default: `'push'`.
 
 ```ts
-// Single config — replace mode
 const search = useRouteState({ key: 'q', parser: parseAsString.default(''), history: 'replace' })
-
-// Array mode — per-config history
-const filters = useRouteState([
-  { key: 'q', parser: parseAsString.default(''), history: 'replace' },
-  { key: 'page', parser: parseAsInteger.default(1) },
-])
 ```
 
-Use `'replace'` for high-frequency updates where individual state changes do not constitute meaningful history entries, such as live search input or range sliders.
-
-#### Individual Ref Setters
-
-When updating a single value through its ref (e.g. `filters.q.value = 'vue'`), the `history` mode defined on that config is used directly.
+`'replace'` updates the URL without adding a new history entry. This is useful in scenarios where the parameter changes frequently — such as a search input updating on every keystroke or a range slider adjusting continuously.
 
 #### History Resolution in Batch Operations
 
-When `set()` or `reset()` updates multiple configs in a single navigation, each config may specify a different `history` mode. The resolution follows these rules:
+When `set()` or `reset()` involves configs with different history modes:
 
-1. **Call-site override wins** — If `set()` or `reset()` is called with `{ history }`, that value is used unconditionally.
-2. **Push wins** — Otherwise, if any config involved in the batch has `history: 'push'`, the navigation uses `push`.
-3. **Replace as fallback** — If all configs involved specify `history: 'replace'`, the navigation uses `replace`.
-
-The rationale: `push` creates a browser history entry that `replace` does not. Silently converting `push` to `replace` loses a history entry the developer explicitly requested, which is more harmful than creating an extra one.
+1. **Call-site override wins** — `{ history }` passed to `set()`/`reset()` is used unconditionally.
+2. **Push wins** — If any config in the batch has `history: 'push'`, the navigation uses push.
+3. **Replace as fallback** — Only when all configs specify `'replace'`.
 
 ```ts
 const state = useRouteState([
@@ -447,100 +325,54 @@ const state = useRouteState([
   { key: 'page', parser: parseAsInteger.default(1), history: 'push' },
 ])
 
-// push wins — page wants push, so the navigation creates a history entry
-state.set({ q: 'vue', page: 2 })
-
-// Only updating q (replace) — navigation uses replace
-state.set({ q: 'react' })
-
-// Call-site override — forces replace regardless of per-config settings
-state.set({ q: 'vue', page: 2 }, { history: 'replace' })
+state.set({ q: 'vue', page: 2 }) // push wins
+state.set({ q: 'react' }) // only q → replace
+state.set({ q: 'vue', page: 2 }, { history: 'replace' }) // override → replace
 ```
 
 ### `clearOnDefault`
 
-When enabled (the default), parameters are removed from the URL when their value equals the default. This keeps URLs clean — a page in its default state contains no unnecessary query parameters.
+Removes the parameter from the URL when its value equals the default. Enabled by default.
 
 ```ts
 const page = useRouteState({ key: 'page', parser: parseAsInteger.default(1), clearOnDefault: false })
-// ?page=1 remains in the URL even though 1 is the default
+// ?page=1 stays in the URL
 ```
 
-Disable this option when the URL should always provide a complete and explicit snapshot of the current state, regardless of defaults.
+## Reusable Configs
 
-## Reusable Composables
-
-Configurations can be shared across components using `routeStateOptions()`. This is an identity function that provides type inference when defining configs outside of `useRouteState` — in separate files, shared modules, or composables. It is never required; `useRouteState` provides the same inference inline.
+`defineRouteStateOptions()` provides type inference for configs defined outside of `useRouteState`:
 
 ```ts
 // composables/states.ts
-import {
-  parseAsArrayOf,
-  parseAsInteger,
-  parseAsString,
-  parseAsStringLiteral,
-  routeStateOptions,
-} from 'qpick'
+import { defineRouteStateOptions, parseAsInteger, parseAsString } from 'qpick'
 
-export const searchState = routeStateOptions({
+export const searchState = defineRouteStateOptions({
   key: 'search',
   parser: parseAsString.default(''),
   urlKey: 'q',
 })
 
-export const pageState = routeStateOptions({
+export const pageState = defineRouteStateOptions({
   key: 'page',
   parser: parseAsInteger.default(1),
 })
-
-export const sortState = routeStateOptions({
-  key: 'sort',
-  parser: parseAsStringLiteral(['price', 'name', 'rating']).default('price'),
-})
-
-export const categoriesState = routeStateOptions({
-  key: 'categories',
-  parser: parseAsArrayOf(parseAsString).default([]),
-})
 ```
 
-All components that use the same config remain in sync — they read from and write to the same URL:
+Shared configs keep components in sync — they read from and write to the same URL:
 
 ```html
 <!-- ProductList.vue -->
 <script setup lang="ts">
-import { watch } from 'vue'
 import { useRouteState } from 'qpick'
-import { categoriesState, pageState, searchState, sortState } from '@/composables/states'
+import { pageState, searchState } from '@/composables/states'
 
-const filters = useRouteState([searchState, pageState, sortState, categoriesState])
-
-watch(() => filters.toObject(), (params) => {
-  fetchProducts(params)
-})
+const filters = useRouteState([searchState, pageState])
 </script>
-
-<template>
-  <input v-model="filters.search.value" placeholder="Search products...">
-  <select v-model="filters.sort.value">
-    <option value="price">
-      Price
-    </option>
-    <option value="name">
-      Name
-    </option>
-    <option value="rating">
-      Rating
-    </option>
-  </select>
-  <button @click="filters.reset()">
-    Clear all filters
-  </button>
-</template>
 ```
 
 ```html
-<!-- ProductPagination.vue — same URL state, different component -->
+<!-- Pagination.vue -->
 <script setup lang="ts">
 import { useRouteState } from 'qpick'
 import { pageState } from '@/composables/states'
@@ -549,21 +381,32 @@ const page = useRouteState(pageState)
 </script>
 
 <template>
+  <button :disabled="page <= 1" @click="page--">Previous</button>
   <span>Page {{ page }}</span>
-  <button :disabled="page <= 1" @click="page--">
-    Previous
-  </button>
-  <button @click="page++">
-    Next
-  </button>
+  <button @click="page++">Next</button>
 </template>
 ```
 
-Both components share the same URL state. A change to `page` in `ProductPagination` is reflected in `ProductList` automatically, as both derive their state from the same reactive source: the URL.
+## Plugin Setup (Optional)
+
+`useRouteState` works without any plugin. `defineQPick` is only needed to override global defaults:
+
+```ts
+import { defineQPick } from 'qpick'
+
+app.use(defineQPick({
+  defaults: {
+    history: 'push', // 'push' | 'replace' — default: 'push'
+    clearOnDefault: true, // default: true
+  },
+}))
+```
+
+Without the plugin, built-in defaults (`history: 'push'`, `clearOnDefault: true`) are used.
 
 ## Type Inference
 
-All types are inferred from parser definitions. Manual type annotations are not required:
+All types are inferred from parser definitions:
 
 ```ts
 const page = useRouteState({ key: 'page', parser: parseAsInteger })
@@ -571,35 +414,15 @@ const page = useRouteState({ key: 'page', parser: parseAsInteger })
 
 const page = useRouteState({ key: 'page', parser: parseAsInteger.default(1) })
 // WritableComputedRef<number>
-
-const filters = useRouteState([
-  { key: 'q', parser: parseAsString.default('') },
-  { key: 'page', parser: parseAsInteger.default(1) },
-])
-// filters.q    → WritableComputedRef<string>
-// filters.page → WritableComputedRef<number>
 ```
 
-The `InferParserType` utility type extracts the value type from any parser:
+The `InferParserType` utility extracts the value type from a parser:
 
 ```ts
 import type { InferParserType } from 'qpick'
-import { parseAsInteger } from 'qpick'
 
 type PageValue = InferParserType<typeof parseAsInteger>
 // number | null
-```
-
-`routeStateOptions()` also provides full type inference when defining configs outside of components:
-
-```ts
-import { parseAsInteger, routeStateOptions } from 'qpick'
-
-const pageState = routeStateOptions({
-  key: 'page',
-  parser: parseAsInteger.default(1),
-})
-// → { key: 'page', parser: ParserWithDefault<number, number>, ... }
 ```
 
 ## License
