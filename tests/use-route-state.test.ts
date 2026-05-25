@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 import {
   parseAsArrayOf,
   parseAsBoolean,
@@ -6,7 +7,7 @@ import {
   parseAsString,
   parseAsStringLiteral,
 } from '../src/core/parsers'
-import { routeStateOptions } from '../src/core/route-state-options'
+import { defineRouteStateOptions } from '../src/core/route-state-options'
 import { useRouteState } from '../src/vue/use-route-state'
 import { withSetup } from './test-utils'
 
@@ -15,6 +16,7 @@ const flushNavigation = () => new Promise(resolve => setTimeout(resolve, 0))
 describe('useRouteState (single config, no parser)', () => {
   it('returns null when query param is absent', async () => {
     const { result } = await withSetup(() => useRouteState({ key: 'q' }))
+
     expect(result.value).toBeNull()
   })
 
@@ -23,6 +25,7 @@ describe('useRouteState (single config, no parser)', () => {
       () => useRouteState({ key: 'q' }),
       { initialRoute: '/?q=hello' },
     )
+
     expect(result.value).toBe('hello')
   })
 
@@ -54,6 +57,7 @@ describe('useRouteState (single config, with parser)', () => {
       () => useRouteState({ key: 'page', parser: parseAsInteger }),
       { initialRoute: '/?page=3' },
     )
+
     expect(result.value).toBe(3)
   })
 
@@ -62,6 +66,7 @@ describe('useRouteState (single config, with parser)', () => {
       () => useRouteState({ key: 'page', parser: parseAsInteger }),
       { initialRoute: '/?page=abc' },
     )
+
     expect(result.value).toBeNull()
   })
 
@@ -81,6 +86,7 @@ describe('useRouteState (single config, with parser)', () => {
       () => useRouteState({ key: 'open', parser: parseAsBoolean }),
       { initialRoute: '/?open=true' },
     )
+
     expect(result.value).toBe(true)
   })
 })
@@ -90,6 +96,7 @@ describe('useRouteState (single config, with default)', () => {
     const { result } = await withSetup(
       () => useRouteState({ key: 'page', parser: parseAsInteger.default(1) }),
     )
+
     expect(result.value).toBe(1)
   })
 
@@ -98,6 +105,7 @@ describe('useRouteState (single config, with default)', () => {
       () => useRouteState({ key: 'page', parser: parseAsInteger.default(1) }),
       { initialRoute: '/?page=abc' },
     )
+
     expect(result.value).toBe(1)
   })
 
@@ -144,6 +152,7 @@ describe('useRouteState (single config, path params)', () => {
       () => useRouteState({ key: 'id', parser: parseAsInteger }),
       { initialRoute: '/users/42' },
     )
+
     expect(result.value).toBe(42)
   })
 
@@ -152,6 +161,7 @@ describe('useRouteState (single config, path params)', () => {
       () => useRouteState({ key: 'id', parser: parseAsInteger, source: 'params' }),
       { initialRoute: '/users/42' },
     )
+
     expect(result.value).toBe(42)
   })
 })
@@ -175,6 +185,7 @@ describe('useRouteState (single config, urlKey)', () => {
       () => useRouteState({ key: 'search', parser: parseAsString.default(''), urlKey: 'q' }),
       { initialRoute: '/?q=vue' },
     )
+
     expect(result.value).toBe('vue')
   })
 
@@ -403,13 +414,13 @@ describe('useRouteState (array mode, complex parsers)', () => {
   })
 })
 
-describe('routeStateOptions()', () => {
+describe('defineRouteStateOptions()', () => {
   it('returns config unchanged (identity function)', () => {
     const input = {
       key: 'page' as const,
       parser: parseAsInteger.default(1),
     }
-    const config = routeStateOptions(input)
+    const config = defineRouteStateOptions(input)
 
     expect(config).toBe(input)
     expect(config.key).toBe('page')
@@ -418,14 +429,14 @@ describe('routeStateOptions()', () => {
 
   it('returns config unchanged when no parser given (identity)', () => {
     const input = { key: 'name' } as const
-    const config = routeStateOptions(input)
+    const config = defineRouteStateOptions(input)
 
     expect(config.key).toBe('name')
     expect(config).toBe(input)
   })
 
   it('preserves per-key options', () => {
-    const config = routeStateOptions({
+    const config = defineRouteStateOptions({
       key: 'page',
       parser: parseAsInteger.default(1),
       urlKey: 'p',
@@ -441,9 +452,9 @@ describe('routeStateOptions()', () => {
   })
 })
 
-describe('useRouteState (pre-defined configs via routeStateOptions)', () => {
+describe('useRouteState (pre-defined configs via defineRouteStateOptions)', () => {
   it('works with a single pre-defined config', async () => {
-    const pageState = routeStateOptions({
+    const pageState = defineRouteStateOptions({
       key: 'page',
       parser: parseAsInteger.default(1),
     })
@@ -457,12 +468,12 @@ describe('useRouteState (pre-defined configs via routeStateOptions)', () => {
   })
 
   it('works with array of pre-defined configs', async () => {
-    const pageState = routeStateOptions({
+    const pageState = defineRouteStateOptions({
       key: 'page',
       parser: parseAsInteger.default(1),
       urlKey: 'p',
     })
-    const searchState = routeStateOptions({
+    const searchState = defineRouteStateOptions({
       key: 'q',
       parser: parseAsString.default(''),
     })
@@ -477,7 +488,7 @@ describe('useRouteState (pre-defined configs via routeStateOptions)', () => {
   })
 
   it('works with mixed pre-defined and inline configs', async () => {
-    const pageState = routeStateOptions({
+    const pageState = defineRouteStateOptions({
       key: 'page',
       parser: parseAsInteger.default(1),
     })
@@ -495,7 +506,7 @@ describe('useRouteState (pre-defined configs via routeStateOptions)', () => {
   })
 
   it('shared config used in multiple useRouteState calls', async () => {
-    const pageState = routeStateOptions({
+    const pageState = defineRouteStateOptions({
       key: 'page',
       parser: parseAsInteger.default(1),
     })
@@ -511,7 +522,7 @@ describe('useRouteState (pre-defined configs via routeStateOptions)', () => {
   })
 
   it('pre-defined config without parser defaults to string', async () => {
-    const nameState = routeStateOptions({ key: 'name' })
+    const nameState = defineRouteStateOptions({ key: 'name' })
 
     const { result } = await withSetup(
       () => useRouteState(nameState),
@@ -677,5 +688,40 @@ describe('useRouteState (array mode, history resolution)', () => {
 
     expect(replaceSpy).toHaveBeenCalledOnce()
     expect(pushSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('useRouteState (array mode, duplicate keys)', () => {
+  it('last config silently overwrites earlier ones with the same key', async () => {
+    const { result } = await withSetup(
+      () => useRouteState([
+        { key: 'page', parser: parseAsInteger.default(1) },
+        { key: 'page', parser: parseAsInteger.default(99) },
+      ]),
+      { initialRoute: '/' },
+    )
+
+    expect(result.page.value).toBe(99)
+  })
+})
+
+describe('useRouteState (array mode, same urlKey different sources)', () => {
+  it('distinguishes path and query params with the same urlKey', async () => {
+    const { result } = await withSetup(
+      () => useRouteState([
+        { key: 'brandId', parser: parseAsInteger, source: 'params', urlKey: 'id' },
+        { key: 'productId', parser: parseAsInteger, source: 'query', urlKey: 'id' },
+      ]),
+      {
+        routes: [
+          { path: '/', component: defineComponent({ render: () => h('div') }) },
+          { name: 'brand', path: '/brands/:id', component: defineComponent({ render: () => h('div') }) },
+        ],
+        initialRoute: '/brands/10?id=456',
+      },
+    )
+
+    expect(result.brandId.value).toBe(10)
+    expect(result.productId.value).toBe(456)
   })
 })

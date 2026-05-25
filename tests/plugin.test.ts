@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createApp, defineComponent, h } from 'vue'
-import { createQPick } from '../src/vue/plugin'
+import { defineQPick } from '../src/vue/plugin'
 import { createTestRouter } from './test-utils'
 
-describe('createQPick', () => {
+describe('defineQPick', () => {
   it('provides context to child components', async () => {
     const router = createTestRouter()
-    const plugin = createQPick()
+    const plugin = defineQPick()
 
     const App = defineComponent({
       setup() {
@@ -26,7 +26,7 @@ describe('createQPick', () => {
   })
 
   it('applies default options', async () => {
-    const plugin = createQPick({
+    const plugin = defineQPick({
       defaults: { history: 'replace', clearOnDefault: false },
     })
 
@@ -35,7 +35,7 @@ describe('createQPick', () => {
   })
 
   it('uses push as default history mode', async () => {
-    const plugin = createQPick()
+    const plugin = defineQPick()
 
     expect(plugin.defaults.history).toBe('push')
   })

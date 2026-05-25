@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createParser,
+  defineParser,
   parseAsArrayOf,
   parseAsBoolean,
   parseAsDate,
@@ -14,9 +14,9 @@ import {
   parseAsStringLiteral,
 } from '../src/core/parsers'
 
-describe('createParser', () => {
+describe('defineParser', () => {
   it('creates a parser with parse and serialize', () => {
-    const parser = createParser<number>({
+    const parser = defineParser<number>({
       parse: v => Number(v) || null,
       serialize: v => String(v),
     })
@@ -27,23 +27,12 @@ describe('createParser', () => {
   })
 
   it('supports .default()', () => {
-    const parser = createParser<number>({
+    const parser = defineParser<number>({
       parse: v => Number(v) || null,
       serialize: v => String(v),
     }).default(0)
 
     expect(parser.defaultValue).toBe(0)
-  })
-
-  it('supports custom eq function', () => {
-    const parser = createParser<{ x: number }>({
-      parse: v => ({ x: Number(v) }),
-      serialize: v => String(v.x),
-      eq: (a, b) => a.x === b.x,
-    })
-
-    expect(parser.eq!({ x: 1 }, { x: 1 })).toBe(true)
-    expect(parser.eq!({ x: 1 }, { x: 2 })).toBe(false)
   })
 })
 
@@ -59,6 +48,7 @@ describe('parseAsString', () => {
 
   it('supports .default()', () => {
     const parser = parseAsString.default('')
+
     expect(parser.defaultValue).toBe('')
   })
 })
@@ -76,9 +66,9 @@ describe('parseAsInteger', () => {
     expect(parseAsInteger.parse('3.14')).toBe(3) // parseInt truncates
   })
 
-  it('serializes by rounding', () => {
+  it('serializes by truncating', () => {
     expect(parseAsInteger.serialize(42)).toBe('42')
-    expect(parseAsInteger.serialize(3.7)).toBe('4')
+    expect(parseAsInteger.serialize(3.7)).toBe('3')
   })
 })
 
@@ -186,12 +176,14 @@ describe('parseAsStringEnum', () => {
 describe('parseAsDate', () => {
   it('parses YYYY-MM-DD as UTC midnight', () => {
     const result = parseAsDate.parse('2024-01-15')
+
     expect(result).toBeInstanceOf(Date)
     expect(result!.toISOString()).toBe('2024-01-15T00:00:00.000Z')
   })
 
   it('serializes to YYYY-MM-DD', () => {
     const date = new Date('2024-01-15T00:00:00.000Z')
+
     expect(parseAsDate.serialize(date)).toBe('2024-01-15')
   })
 
@@ -201,21 +193,24 @@ describe('parseAsDate', () => {
 
   it('parses full ISO datetime and normalizes to date', () => {
     const result = parseAsDate.parse('2024-01-15T10:30:00Z')
+
     expect(result).toBeInstanceOf(Date)
     expect(parseAsDate.serialize(result!)).toBe('2024-01-15')
   })
 
-  it('compares dates by time value', () => {
+  it('compares dates by serialized value (idempotent)', () => {
     const a = new Date('2024-01-15T00:00:00.000Z')
     const b = new Date('2024-01-15T00:00:00.000Z')
     const c = new Date('2024-01-16T00:00:00.000Z')
-    expect(parseAsDate.eq!(a, b)).toBe(true)
-    expect(parseAsDate.eq!(a, c)).toBe(false)
+
+    expect(parseAsDate.serialize(a) === parseAsDate.serialize(b)).toBe(true)
+    expect(parseAsDate.serialize(a) === parseAsDate.serialize(c)).toBe(false)
   })
 
   it('supports .default()', () => {
     const date = new Date('2024-01-01T00:00:00.000Z')
     const parser = parseAsDate.default(date)
+
     expect(parser.defaultValue).toBe(date)
   })
 })
@@ -225,12 +220,14 @@ describe('parseAsDate.iso()', () => {
 
   it('parses full ISO datetime', () => {
     const result = parser.parse('2024-01-15T10:30:00.000Z')
+
     expect(result).toBeInstanceOf(Date)
     expect(result!.toISOString()).toBe('2024-01-15T10:30:00.000Z')
   })
 
   it('serializes to full ISO datetime', () => {
     const date = new Date('2024-01-15T10:30:00.000Z')
+
     expect(parser.serialize(date)).toBe('2024-01-15T10:30:00.000Z')
   })
 
@@ -244,12 +241,14 @@ describe('parseAsDate.timestamp()', () => {
 
   it('parses unix milliseconds', () => {
     const result = parser.parse('1705312200000')
+
     expect(result).toBeInstanceOf(Date)
     expect(result!.getTime()).toBe(1705312200000)
   })
 
   it('serializes to unix milliseconds string', () => {
     const date = new Date(1705312200000)
+
     expect(parser.serialize(date)).toBe('1705312200000')
   })
 
@@ -261,49 +260,62 @@ describe('parseAsDate.timestamp()', () => {
 describe('parseAsArrayOf', () => {
   it('parses comma-separated strings', () => {
     const parser = parseAsArrayOf(parseAsString)
+
     expect(parser.parse('a,b,c')).toEqual(['a', 'b', 'c'])
   })
 
   it('parses comma-separated integers', () => {
     const parser = parseAsArrayOf(parseAsInteger)
+
     expect(parser.parse('1,2,3')).toEqual([1, 2, 3])
   })
 
   it('returns null if any item fails to parse', () => {
     const parser = parseAsArrayOf(parseAsInteger)
+
     expect(parser.parse('1,abc,3')).toBeNull()
   })
 
   it('parses empty string as empty array', () => {
     const parser = parseAsArrayOf(parseAsString)
+
     expect(parser.parse('')).toEqual([])
   })
 
   it('supports custom separator', () => {
     const parser = parseAsArrayOf(parseAsInteger, ';')
+
     expect(parser.parse('1;2;3')).toEqual([1, 2, 3])
   })
 
   it('serializes array to separated string', () => {
     const parser = parseAsArrayOf(parseAsString)
+
     expect(parser.serialize(['a', 'b', 'c'])).toBe('a,b,c')
   })
 
-  it('compares arrays element by element', () => {
+  it('compares arrays by serialized value (idempotent)', () => {
     const parser = parseAsArrayOf(parseAsInteger)
-    expect(parser.eq!([1, 2], [1, 2])).toBe(true)
-    expect(parser.eq!([1, 2], [1, 3])).toBe(false)
-    expect(parser.eq!([1, 2], [1])).toBe(false)
+    const a = parser.serialize([1, 2])
+    const b = parser.serialize([1, 2])
+    const c = parser.serialize([1, 3])
+    const d = parser.serialize([1])
+
+    expect(a === b).toBe(true)
+    expect(a === c).toBe(false)
+    expect(a === d).toBe(false)
   })
 
   it('supports .default()', () => {
     const parser = parseAsArrayOf(parseAsString).default([])
+
     expect(parser.defaultValue).toEqual([])
   })
 
   it('works with configured parsers like parseAsDate.iso()', () => {
     const parser = parseAsArrayOf(parseAsDate.iso())
     const result = parser.parse('2024-01-15T10:30:00.000Z,2024-02-20T08:00:00.000Z')
+
     expect(result).toEqual([
       new Date('2024-01-15T10:30:00.000Z'),
       new Date('2024-02-20T08:00:00.000Z'),
@@ -314,6 +326,7 @@ describe('parseAsArrayOf', () => {
   it('works with configured parsers like parseAsDate.timestamp()', () => {
     const parser = parseAsArrayOf(parseAsDate.timestamp())
     const result = parser.parse('1705312200000,1708416000000')
+
     expect(result).toEqual([
       new Date(1705312200000),
       new Date(1708416000000),
@@ -325,16 +338,19 @@ describe('parseAsArrayOf', () => {
 describe('parseAsJson', () => {
   it('parses valid JSON', () => {
     const parser = parseAsJson<{ name: string }>()
+
     expect(parser.parse('{"name":"vue"}')).toEqual({ name: 'vue' })
   })
 
   it('returns null for invalid JSON', () => {
     const parser = parseAsJson()
+
     expect(parser.parse('not json')).toBeNull()
   })
 
   it('serializes object to JSON string', () => {
     const parser = parseAsJson<{ name: string }>()
+
     expect(parser.serialize({ name: 'vue' })).toBe('{"name":"vue"}')
   })
 })

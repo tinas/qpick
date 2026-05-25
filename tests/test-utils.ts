@@ -2,7 +2,7 @@ import type { Router, RouteRecordRaw } from 'vue-router'
 import type { RouteStateOptions } from '../src/core/types'
 import { createApp, defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { createQPick } from '../src/vue/plugin'
+import { defineQPick } from '../src/vue/plugin'
 
 export function createTestRouter(routes: RouteRecordRaw[] = []): Router {
   const defaultRoutes: RouteRecordRaw[] = routes.length > 0
@@ -28,7 +28,7 @@ export function withSetup<T>(
 ): Promise<{ result: T, router: Router }> {
   return (async () => {
     const router = createTestRouter(options?.routes)
-    const plugin = createQPick({
+    const plugin = defineQPick({
       defaults: options?.pluginDefaults,
     })
 
