@@ -1,7 +1,10 @@
+/**
+ * @see https://url.spec.whatwg.org/#dom-urlsearchparams-get — null return convention
+ * @see https://url.spec.whatwg.org/#goals — idempotency guarantee
+ */
 export type ParserConfig<T> = {
   parse: (value: string) => T | null
   serialize: (value: T) => string
-  eq?: (a: T, b: T) => boolean
 }
 
 export type Parser<T> = ParserConfig<T> & {

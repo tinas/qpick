@@ -1,5 +1,5 @@
 export {
-  createParser,
+  defineParser,
   parseAsArrayOf,
   parseAsBoolean,
   parseAsDate,
@@ -13,7 +13,7 @@ export {
   parseAsStringLiteral,
 } from './parsers'
 
-export { routeStateOptions } from './route-state-options'
+export { defineRouteStateOptions } from './route-state-options'
 
 export type {
   HistoryMode,

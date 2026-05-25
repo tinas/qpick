@@ -69,8 +69,7 @@ function shouldClear<T>(parser: Parser<T>, value: T, clearOnDefault: boolean): b
   if (!clearOnDefault || !('defaultValue' in parser))
     return false
   const def = (parser as ParserWithDefault<T, T>).defaultValue
-  const eq = parser.eq ?? ((a: T, b: T) => a === b)
-  return eq(value, def)
+  return parser.serialize(value) === parser.serialize(def)
 }
 
 function toSerialized<T>(

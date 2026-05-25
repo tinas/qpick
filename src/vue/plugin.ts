@@ -18,7 +18,7 @@ export const DEFAULT_OPTIONS: Partial<RouteStateOptions> = {
   clearOnDefault: true,
 }
 
-export function createQPick(options?: QPickOptions): QPickPlugin {
+export function defineQPick(options?: QPickOptions): QPickPlugin {
   const defaults: Partial<RouteStateOptions> = {
     ...DEFAULT_OPTIONS,
     ...options?.defaults,

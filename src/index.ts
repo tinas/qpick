@@ -12,7 +12,8 @@ export type {
 } from './core'
 
 export {
-  createParser,
+  defineParser,
+  defineRouteStateOptions,
   parseAsArrayOf,
   parseAsBoolean,
   parseAsDate,
@@ -24,7 +25,6 @@ export {
   parseAsString,
   parseAsStringEnum,
   parseAsStringLiteral,
-  routeStateOptions,
 } from './core'
 
 export type {
@@ -33,6 +33,6 @@ export type {
 } from './vue'
 
 export {
-  createQPick,
+  defineQPick,
   useRouteState,
 } from './vue'

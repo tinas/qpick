@@ -1,37 +1,32 @@
 import type { Parser, ParserConfig, ParserWithDefault } from './types'
 
-function buildParser<T>(config: ParserConfig<T>): Parser<T> {
+export function defineParser<T>(config: ParserConfig<T>): Parser<T> {
   return {
     parse: config.parse,
     serialize: config.serialize,
-    eq: config.eq,
 
     default<D extends T>(value: D): ParserWithDefault<T, D> {
-      const p = buildParser<T>(config) as ParserWithDefault<T, D>
+      const p = defineParser<T>(config) as ParserWithDefault<T, D>
       Object.defineProperty(p, 'defaultValue', { value, writable: false, enumerable: true })
       return p
     },
   }
 }
 
-export function createParser<T>(config: ParserConfig<T>): Parser<T> {
-  return buildParser(config)
-}
-
-export const parseAsString = createParser<string>({
+export const parseAsString = defineParser<string>({
   parse: v => v,
   serialize: v => v,
 })
 
-export const parseAsInteger = createParser<number>({
+export const parseAsInteger = defineParser<number>({
   parse: (v) => {
     const n = Number.parseInt(v, 10)
     return Number.isNaN(n) ? null : n
   },
-  serialize: v => Math.round(v).toString(),
+  serialize: v => Math.trunc(v).toString(),
 })
 
-export const parseAsFloat = createParser<number>({
+export const parseAsFloat = defineParser<number>({
   parse: (v) => {
     const n = Number.parseFloat(v)
     return Number.isNaN(n) ? null : n
@@ -39,28 +34,28 @@ export const parseAsFloat = createParser<number>({
   serialize: v => v.toString(),
 })
 
-export const parseAsIndex = createParser<number>({
+export const parseAsIndex = defineParser<number>({
   parse: (v) => {
     const n = Number.parseInt(v, 10)
     return Number.isNaN(n) ? null : n - 1
   },
-  serialize: v => (v + 1).toString(),
+  serialize: v => (Math.trunc(v) + 1).toString(),
 })
 
-export const parseAsBoolean = createParser<boolean>({
+export const parseAsBoolean = defineParser<boolean>({
   parse: v => (v === 'true' ? true : v === 'false' ? false : null),
   serialize: v => (v ? 'true' : 'false'),
 })
 
 export function parseAsStringLiteral<const T extends readonly string[]>(validValues: T): Parser<T[number]> {
-  return createParser<T[number]>({
+  return defineParser<T[number]>({
     parse: v => (validValues.includes(v) ? v as T[number] : null),
     serialize: v => v,
   })
 }
 
 export function parseAsNumberLiteral<const T extends readonly number[]>(validValues: T): Parser<T[number]> {
-  return createParser<T[number]>({
+  return defineParser<T[number]>({
     parse: (v) => {
       const n = Number.parseFloat(v)
       return validValues.includes(n) ? n as T[number] : null
@@ -79,7 +74,6 @@ const dateConfig: ParserConfig<Date> = {
     return Number.isNaN(d.getTime()) ? null : d
   },
   serialize: v => v.toISOString().slice(0, 10),
-  eq: (a, b) => a.getTime() === b.getTime(),
 }
 
 const isoConfig: ParserConfig<Date> = {
@@ -88,7 +82,6 @@ const isoConfig: ParserConfig<Date> = {
     return Number.isNaN(d.getTime()) ? null : d
   },
   serialize: v => v.toISOString(),
-  eq: (a, b) => a.getTime() === b.getTime(),
 }
 
 const timestampConfig: ParserConfig<Date> = {
@@ -100,7 +93,6 @@ const timestampConfig: ParserConfig<Date> = {
     return Number.isNaN(d.getTime()) ? null : d
   },
   serialize: v => v.getTime().toString(),
-  eq: (a, b) => a.getTime() === b.getTime(),
 }
 
 /**
@@ -113,13 +105,13 @@ const timestampConfig: ParserConfig<Date> = {
 export const parseAsDate: Parser<Date> & {
   iso: () => Parser<Date>
   timestamp: () => Parser<Date>
-} = Object.assign(createParser(dateConfig), {
-  iso: () => createParser(isoConfig),
-  timestamp: () => createParser(timestampConfig),
+} = Object.assign(defineParser(dateConfig), {
+  iso: () => defineParser(isoConfig),
+  timestamp: () => defineParser(timestampConfig),
 })
 
 export function parseAsArrayOf<T>(itemParser: Parser<T>, separator = ','): Parser<T[]> {
-  return createParser<T[]>({
+  return defineParser<T[]>({
     parse: (v) => {
       if (v === '')
         return []
@@ -134,17 +126,11 @@ export function parseAsArrayOf<T>(itemParser: Parser<T>, separator = ','): Parse
       return result
     },
     serialize: v => v.map(item => itemParser.serialize(item)).join(separator),
-    eq: (a, b) => {
-      if (a.length !== b.length)
-        return false
-      const eq = itemParser.eq ?? ((x, y) => x === y)
-      return a.every((val, i) => eq(val, b[i]!))
-    },
   })
 }
 
 export function parseAsJson<T>(): Parser<T> {
-  return createParser<T>({
+  return defineParser<T>({
     parse: (v) => {
       try {
         return JSON.parse(v) as T
